@@ -85,7 +85,12 @@ def main(argv: list[str] | None = None) -> int:
         config.reload_dotenv()
         settings = config.load_settings(dry_run_override=True if args.dry_run else None)
         notifier = (
-            build_notifier(settings.channel, settings.webhook_url, settings.webhook_secret)
+            build_notifier(
+                settings.channel,
+                settings.webhook_url,
+                settings.webhook_secret,
+                strong=settings.strong_alert,
+            )
             if settings.notify_enabled and not args.dry_run
             else NullNotifier()
         )

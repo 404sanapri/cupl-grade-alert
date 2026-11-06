@@ -124,7 +124,12 @@ def run(dry_run: bool) -> int:
     notifier = (
         NullNotifier()
         if (dry_run or not settings.notify_enabled)
-        else build_notifier(settings.channel, settings.webhook_url, settings.webhook_secret)
+        else build_notifier(
+            settings.channel,
+            settings.webhook_url,
+            settings.webhook_secret,
+            strong=settings.strong_alert,
+        )
     )
 
     _, code = run_checked(settings, notifier, dry_run=dry_run)

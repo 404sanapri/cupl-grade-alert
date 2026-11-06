@@ -38,6 +38,13 @@ GRADE_URL_CANDIDATES = (
 )
 
 _CHANNEL_ALIASES = {
+    "desktop": "desktop",
+    "pc": "desktop",
+    "toast": "desktop",
+    "电脑": "desktop",
+    "电脑通知": "desktop",
+    "本地": "desktop",
+    "系统通知": "desktop",
     "dingtalk": "dingtalk",
     "钉钉": "dingtalk",
     "feishu": "feishu",
@@ -46,6 +53,9 @@ _CHANNEL_ALIASES = {
     "none": "none",
     "": "none",
 }
+
+# 不需要 Webhook 就能发通知的渠道
+_NON_WEBHOOK_CHANNELS = {"desktop", "none"}
 
 
 class ConfigError(RuntimeError):
@@ -108,16 +118,21 @@ class Settings:
     auth_mode: str
     dry_run: bool
     keep_baseline: bool
+    strong_alert: bool = False
 
     @property
     def notify_enabled(self) -> bool:
-        return self.channel != "none" and bool(self.webhook_url)
+        if self.channel == "none":
+            return False
+        if self.channel == "desktop":
+            return True
+        return bool(self.webhook_url)
 
     def safe_summary(self) -> str:
         """可安全写日志的配置摘要，不包含任何凭据。"""
         return (
             f"user={self.username[:3]}*** auth={self.auth_mode} channel={self.channel} "
-            f"notify={'on' if self.notify_enabled else 'off'} "
+            f"notify={'on' if self.notify_enabled else 'off'} strong={self.strong_alert} "
             f"grade_url={self.grade_url or '(auto)'} state={self.state_path.name} "
             f"dry_run={self.dry_run}"
         )
@@ -131,15 +146,17 @@ def load_settings(env_file: Path | None = None, dry_run_override: bool | None = 
     if not username or not password:
         raise ConfigError("缺少 CUPL_USERNAME / CUPL_PASSWORD，请先完成本机或 Secrets 配置")
 
-    raw_channel = os.environ.get("NOTIFY_CHANNEL", "dingtalk").strip().lower()
+    raw_channel = os.environ.get("NOTIFY_CHANNEL", "desktop").strip().lower()
     channel = _CHANNEL_ALIASES.get(raw_channel)
     if channel is None:
-        raise ConfigError(f"不支持的 NOTIFY_CHANNEL={raw_channel!r}，可选 dingtalk / feishu / none")
+        raise ConfigError(
+            f"不支持的 NOTIFY_CHANNEL={raw_channel!r}，可选 desktop / dingtalk / feishu / none"
+        )
 
     webhook_url = os.environ.get("NOTIFY_WEBHOOK", "").strip()
     webhook_secret = os.environ.get("NOTIFY_SECRET", "").strip()
     dry_run = env_bool("DRY_RUN") if dry_run_override is None else dry_run_override
-    if channel != "none" and not webhook_url and not dry_run:
+    if channel not in _NON_WEBHOOK_CHANNELS and not webhook_url and not dry_run:
         raise ConfigError("已启用通知渠道但缺少 NOTIFY_WEBHOOK")
 
     state_raw = os.environ.get("STATE_PATH", "").strip()
@@ -172,4 +189,5 @@ def load_settings(env_file: Path | None = None, dry_run_override: bool | None = 
         auth_mode=auth_mode,
         dry_run=dry_run,
         keep_baseline=env_bool("KEEP_BASELINE"),
+        strong_alert=env_bool("NOTIFY_STRONG", True),
     )

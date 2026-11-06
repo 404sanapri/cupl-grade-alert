@@ -44,12 +44,10 @@ if ([string]::IsNullOrEmpty($password)) {
     exit 1
 }
 
-$channel = Read-Host '通知渠道 dingtalk / feishu（直接回车跳过）'
-$webhook = ''
-$secret = ''
-if (-not [string]::IsNullOrWhiteSpace($channel)) {
-    $webhook = Read-Host '机器人 Webhook 地址'
-    $secret = Read-Host '加签密钥（没有就直接回车）'
+$strong = Read-Host '新增成绩时用强提醒（置顶弹窗 + 闪烁任务栏 + 提示音）？(Y/n)'
+$strongFlag = '1'
+if ($strong -eq 'n' -or $strong -eq 'N') {
+    $strongFlag = '0'
 }
 
 $lines = [System.Collections.Generic.List[string]]::new()
@@ -57,13 +55,8 @@ $lines.Add('# 由 local_setup.ps1 生成，请勿提交到仓库')
 $lines.Add("CUPL_USERNAME=$username")
 $lines.Add("CUPL_PASSWORD=$password")
 $lines.Add('AUTH_MODE=tpass')
-if (-not [string]::IsNullOrWhiteSpace($channel)) {
-    $lines.Add("NOTIFY_CHANNEL=$channel")
-    $lines.Add("NOTIFY_WEBHOOK=$webhook")
-    if (-not [string]::IsNullOrWhiteSpace($secret)) {
-        $lines.Add("NOTIFY_SECRET=$secret")
-    }
-}
+$lines.Add('NOTIFY_CHANNEL=desktop')
+$lines.Add("NOTIFY_STRONG=$strongFlag")
 
 New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 [IO.File]::WriteAllLines($envPath, $lines, (New-Object System.Text.UTF8Encoding($false)))

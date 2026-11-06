@@ -8,6 +8,10 @@
 state/.*.json
 state/*.tmp
 
+# 桌面版的成绩列表缓存（学期 + 科目名，本机可见即可）
+state/grades_cache.json
+state/crash.log
+
 # 探测/调试产物
 probe_output/
 logs/
