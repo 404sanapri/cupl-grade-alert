@@ -9,10 +9,23 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+def _project_root() -> Path:
+    """源码运行时是项目根目录；PyInstaller 打包后是 exe 所在目录。
+
+    这样 exe 旁边的 config\\.env、state\\、logs\\ 才能被正确读写，
+    而不是跑到 _MEIPASS 临时目录里。
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+PROJECT_ROOT = _project_root()
 DEFAULT_STATE_PATH = PROJECT_ROOT / "state" / "grades.json"
 
 BASE_URL = "http://jwxt.cupl.edu.cn"

@@ -98,6 +98,25 @@ def run_once(settings: config.Settings, notifier, dry_run: bool = False) -> dict
     }
 
 
+def run_checked(settings: config.Settings, notifier, dry_run: bool = False) -> tuple[dict | None, int]:
+    """跑一次，失败也按既定策略处理（记失败次数、必要时告警）。
+
+    返回 (结果, 退出码)：成功时结果非空、退出码 0；失败时结果为 None。
+    桌面程序（app.py）用它，可以同时拿到结果详情与统一的失败处理。
+    """
+    try:
+        return run_once(settings, notifier, dry_run=dry_run), 0
+    except EamsError as exc:
+        return None, _handle_failure(settings, notifier, exc)
+    except grade.GradeParseError as exc:
+        return None, _handle_failure(settings, notifier, PageChangedError(str(exc)))
+    except state.StateError as exc:
+        return None, _handle_failure(settings, notifier, PageChangedError(str(exc)))
+    except Exception as exc:  # noqa: BLE001
+        log.exception("未预期异常")
+        return None, _handle_failure(settings, notifier, EamsError(f"{type(exc).__name__}: {exc}"))
+
+
 def run(dry_run: bool) -> int:
     settings = config.load_settings(dry_run_override=dry_run)
     log.info("配置：%s", settings.safe_summary())
@@ -108,18 +127,8 @@ def run(dry_run: bool) -> int:
         else build_notifier(settings.channel, settings.webhook_url, settings.webhook_secret)
     )
 
-    try:
-        run_once(settings, notifier, dry_run=dry_run)
-        return 0
-    except EamsError as exc:
-        return _handle_failure(settings, notifier, exc)
-    except grade.GradeParseError as exc:
-        return _handle_failure(settings, notifier, PageChangedError(str(exc)))
-    except state.StateError as exc:
-        return _handle_failure(settings, notifier, PageChangedError(str(exc)))
-    except Exception as exc:  # noqa: BLE001
-        log.exception("未预期异常")
-        return _handle_failure(settings, notifier, EamsError(f"{type(exc).__name__}: {exc}"))
+    _, code = run_checked(settings, notifier, dry_run=dry_run)
+    return code
 
 
 def _handle_failure(settings: config.Settings, notifier, exc: EamsError) -> int:

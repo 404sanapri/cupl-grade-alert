@@ -2,11 +2,14 @@
 
 教务处成绩是**一科一科**出的。这个项目定时读取你的成绩，**只在出现新科目成绩时**推一条消息到钉钉 / 飞书群，不用反复刷教务系统。
 
-- 运行在你的 GitHub Actions 里：电脑关机也照常检查
-- 凭据只放在你自己的仓库 Secrets，不进代码、不进日志
+- 运行在**你自己的电脑**上（Windows 计划任务）：每 10 分钟检查一次
+- 凭据只放在本机 `config\.env`（已 gitignore），不进代码、不进日志
 - 快照只存哈希键，不存分数，可一键清空
 
-> 默认每 10 分钟检查一次。GitHub 的定时任务有排队延迟，实际时效约 5～15 分钟，不是秒级。
+> ⚠️ **为什么不用 GitHub Actions 定时**：教务系统 `jwxt.cupl.edu.cn:80` 对境外 IP 直接超时。
+> 2026-11-06 实测：同一轮里 `tpass:443` 与 RSA 公钥接口都 PASS，只有 `jwxt:80` 是 `ConnectTimeout`
+> —— 是目标侧拦截，不是 runner 断网。所以 `grade-check.yml` 的 `cron` 已注释，
+> 定时改由本机计划任务驱动，详见 [docs/本机计划任务.md](docs/本机计划任务.md)。
 
 ## 效果
 
@@ -24,6 +27,19 @@
 
 首次运行只建立基线，**不会**把历史成绩一次性刷屏。
 
+## 桌面版 exe（最省事：打开就监测，关掉就停）
+
+双击 `法大成绩提醒.exe` → 立即检查一次 → 之后每 N 分钟自动检查；**关掉窗口就彻底停止**。
+首次运行会弹出设置窗口，填学号、统一认证密码、机器人 Webhook 即可。
+
+自己打包只要一条命令（产物在 `dist\`，约 18 MB，单文件自带 Python）：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build_exe.ps1
+```
+
+细节、排错、与计划任务的区别见 [docs/桌面版.md](docs/桌面版.md)。
+
 ## 图形界面（不想碰命令行就用这个）
 
 双击项目根目录的 **`start_ui.bat`**，浏览器会自动打开 `http://127.0.0.1:8765`。
@@ -40,15 +56,20 @@
 
 - 服务只监听 `127.0.0.1`，不对外网开放；
 - 凭据写入 `config/.env`（已在 `.gitignore` 里），明文仅存于本机；
-- 本机监控依赖这个窗口开着，关掉就停；要 24 小时运行请用 GitHub Actions；
+- 界面里的「监控」开关依赖这个窗口开着，关掉就停；**想让它一直跑，用下面的计划任务**；
 - 也可以在终端启动：`python web\server.py`（加 `--port 8790` 换端口）。
 
-## 四步开始（模板仓库用法）
+## 三步开始（本机计划任务）
 
-### 1. 拿到仓库
+### 1. 装依赖、写配置
 
-点击右上角 **Use this template → Create a new repository**（或直接 Fork），仓库名随意。
-建议保持 **Public**：Actions 免费且额度不限；Private 仓库每月 2000 分钟，10 分钟一次的频率也够用，但余量更紧。
+```powershell
+pip install -r requirements.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\local_setup.ps1
+```
+
+`local_setup.ps1` 会问你学号、**智慧法大统一认证**密码、机器人 Webhook，写入 `config\.env`（已 gitignore）。
+不想敲命令行就双击 `start_ui.bat`，在界面「账号与通知」里填，效果一样。
 
 ### 2. 建一个群机器人
 
@@ -57,39 +78,31 @@
 **飞书**：群设置 → 群机器人 → 添加 → 自定义机器人 → 安全设置勾选 **签名校验**，复制 Webhook 和密钥。
 
 > 也可以改用「自定义关键词」，关键词填 `成绩` —— 本项目所有消息都包含「成绩」二字。
-> **不要用 IP 白名单**：GitHub Actions 的出口 IP 每天都在变。
+> **不要用 IP 白名单**：家庭宽带的公网 IP 也会变。
 
-### 3. 填 5 个 Secret
-
-仓库 **Settings → Secrets and variables → Actions → New repository secret**：
-
-| 名称 | 必填 | 说明 |
-| --- | --- | --- |
-| `CUPL_USERNAME` | 是 | 学号 |
-| `CUPL_PASSWORD` | 是 | **智慧法大统一认证**的密码 |
-| `NOTIFY_CHANNEL` | 是 | `dingtalk` 或 `feishu` |
-| `NOTIFY_WEBHOOK` | 是 | 机器人的 Webhook 地址 |
-| `NOTIFY_SECRET` | 否 | 加签密钥；用关键词校验时留空 |
-
-### 4. 启用并测试
-
-1. 打开 **Actions** 标签页，若提示 workflow 未启用，点 **I understand my workflows, go ahead and enable them**。
-2. 左侧选 **成绩更新监控 → Run workflow**，勾选 `dry_run` 先跑一次：只验证登录与解析，不推送、不写快照。
-3. 日志出现 `解析到 N 条成绩` 即说明账密与接口正常。
-4. 再跑一次（不勾 dry_run）：建立基线，之后每 10 分钟自动检查。
-
-## 本机运行
+### 3. 注册计划任务
 
 ```powershell
-pip install -r requirements.txt
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\local_task.ps1 -Action install -IntervalMinutes 10
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\local_task.ps1 -Action run   # 立刻跑一次，建立基线
+```
+
+第一次运行只建立基线，不会把历史成绩刷屏；之后每 10 分钟检查一次。
+`-Action status` 看运行状态，`-Action remove` 卸载。细节见 [docs/本机计划任务.md](docs/本机计划任务.md)。
+
+> 计划任务只在你**登录 Windows 后**运行；关机 / 休眠期间不检查，开机后会补跑一次。
+
+## 手工运行
+
+```powershell
 Copy-Item config\.env.example config\.env   # 填入账密与 Webhook
 python src\monitor.py --dry-run             # 只验证登录与解析
 python src\monitor.py                       # 真正执行一次
 python src\monitor.py --test-notify         # 测通知渠道
 python src\monitor.py --reset-state         # 清空快照
+python src\scheduled_run.py                 # 无界面跑一次，并写入运行记录（计划任务用的就是它）
+python scripts\connectivity_check.py        # 自检：本机出口能否访问教务系统
 ```
-
-`config\.env` 已被 `.gitignore` 忽略；也可以用 `scripts\local_setup.ps1` 生成。
 
 ## 零凭据公告层（可选，适合分享给同学）
 
@@ -116,13 +129,15 @@ python src\announcement.py             # 正式执行
 ## 工作原理
 
 ```
-Actions 定时触发
+Windows 计划任务（每 10 分钟）
+  → scripts\run_monitor.ps1 选 Python、写日志
+  → src\scheduled_run.py 跑一次并追加 logs\runs.jsonl
   → 统一认证 tpass：POST /tpass/rsa 取公钥 → RSA 加密账密 → 登录
   → POST /eams/teach/grade/course/person!historyCourseGrade.action?projectType=MAJOR
   → 按表头解析课程名 / 学分 / 总评成绩 / 绩点 / 学期
   → 与 state/grades.json 的哈希键集合比对
   → 有新增：推送消息；无新增：静默
-  → 快照回写仓库（state/ 目录）
+  → 快照落盘（state/ 目录，本机文件）
 ```
 
 几个实现上的关键点，排查问题时有用：
@@ -134,33 +149,38 @@ Actions 定时触发
 
 ## 隐私与安全
 
-- 账密只存在于 GitHub Secrets（加密存储）或本机 `.env`（已 gitignore）。
+- 账密只存在于本机 `config\.env`（已 gitignore），不上传任何服务器。
 - 程序与日志**不会**打印密码、Cookie、学号或具体分数；推送消息只含课程名与检测时间。
 - 快照只保存「学期 + 课程名」的 SHA-1 前 16 位，不含明文课程信息。
 - 只查询你自己的成绩，不代查他人。
-- 想彻底清除数据：`python src/monitor.py --reset-state`，并在 GitHub 上删除对应 Secrets。
+- 想彻底清除数据：`python src/monitor.py --reset-state`，再删掉 `config\.env` 与 `logs\`。
 
 **请尽快修改密码。** 如果你的密码仍然等于学号，建议先去 [智慧法大](https://ca.cupl.edu.cn) 改掉再配置本项目。
 
 ## 目录
 
 ```
-src/            config 配置 / tpass_auth 统一认证 / eams_client 会话 / grade 解析 / state 快照 / notify 通知 / monitor 入口
-scripts/        probe_interface.py 接口探测 / connectivity_check.py 连通性自检 / local_setup.ps1 本机初始化
-tests/          31 项单元测试（python -m unittest discover -s tests）
-docs/           方案对比 / 接口探测报告 / 配置向导 / 合规与隐私 / 故障排查
-.github/workflows/  grade-check.yml 主监控 / connectivity-check.yml 连通性自检
+app.py          桌面版入口（tkinter 窗口，打开即监测、关掉即停）
+src/            config 配置 / tpass_auth 统一认证 / eams_client 会话 / grade 解析 / state 快照 / notify 通知
+                monitor 手工入口 / scheduled_run 计划任务入口 / runlog 运行记录
+scripts/        probe_interface.py 接口探测 / connectivity_check.py 连通性自检
+                local_setup.ps1 写 config\.env / local_task.ps1 计划任务管理 / run_monitor.ps1 计划任务包装
+                build_exe.ps1 打包 exe
+tests/          单元测试（python -m unittest discover -s tests）
+docs/           方案对比 / 接口探测报告 / 配置向导 / 合规与隐私 / 故障排查 / 本机计划任务 / 桌面版
+.github/workflows/  grade-check.yml 成绩监控（定时已停用）/ announcement-watch.yml 公告广播 / connectivity-check.yml 连通性自检
 ```
 
 ## 时效与限制
 
 | 项目 | 实际情况 |
 | --- | --- |
-| 检查频率 | 每 10 分钟（cron 最小 5 分钟） |
-| 实际延迟 | GitHub 排队普遍 5～15 分钟，高峰期更久 |
-| 额度 | Public 仓库免费不限量；Private 每月 2000 分钟 |
+| 检查频率 | 每 10 分钟（脚本允许 5～120 分钟，别设太快） |
+| 实际延迟 | 基本准时；关机 / 休眠期间不检查，开机补跑一次 |
+| 运行前提 | 电脑开着、并且当前用户已登录 Windows |
 | 验证码 | 目前登录不触发；若出现会发告警并要求人工处理，不做自动打码 |
 | 页面改版 | 解析失败会发「监控失效」告警，而不是静默失效 |
+| GitHub Actions | 只保留公告广播与手动触发；境外 runner 访问不了 `jwxt:80` |
 
 更多见 [docs/故障排查与回退.md](docs/故障排查与回退.md)。
 

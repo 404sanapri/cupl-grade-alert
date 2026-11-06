@@ -27,12 +27,13 @@ import config  # noqa: E402
 import grade  # noqa: E402
 import monitor  # noqa: E402
 import notify  # noqa: E402
+import runlog  # noqa: E402
 import state  # noqa: E402
 from notify import NullNotifier, build_notifier  # noqa: E402
 
 WEB_DIR = Path(__file__).resolve().parent
 ENV_FILE = PROJECT_ROOT / "config" / ".env"
-RUN_LOG = PROJECT_ROOT / "logs" / "runs.jsonl"
+RUN_LOG = runlog.RUN_LOG
 DEFAULT_STATE = PROJECT_ROOT / "state" / "grades.json"
 STATIC_FILES = {"index.html", "style.css", "app.js"}
 
@@ -91,22 +92,11 @@ def _mask_webhook(url: str) -> str:
 
 
 def _append_run(entry: dict) -> None:
-    RUN_LOG.parent.mkdir(parents=True, exist_ok=True)
-    with RUN_LOG.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    runlog.append(entry)
 
 
 def read_runs(limit: int = 30) -> list[dict]:
-    if not RUN_LOG.is_file():
-        return []
-    lines = RUN_LOG.read_text(encoding="utf-8", errors="ignore").splitlines()[-limit:]
-    runs = []
-    for line in lines:
-        try:
-            runs.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return list(reversed(runs))
+    return runlog.read(limit)
 
 
 # ---------- 定时监控 ----------

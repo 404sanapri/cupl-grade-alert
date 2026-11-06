@@ -1,9 +1,15 @@
-name: 成绩更新监控
+name: 成绩更新监控（定时已停用）
+
+# ⚠️ 2026-11-06 实测：GitHub Actions 的 runner 全部在境外，
+#    访问 http://jwxt.cupl.edu.cn:80 一律 ConnectTimeout
+#    （同一轮里 tpass:443 与 RSA 公钥接口都 PASS，说明是目标侧限制，不是断网）。
+#    因此这里的 cron 已注释掉——留着只会每 10 分钟失败一次，还会污染仓库提交历史。
+#    定时检查改由本机 Windows 计划任务执行，见 docs/本机计划任务.md。
+#    若将来把 runner 换成国内出口（自建 runner / 云函数），把下面两行取消注释即可。
 
 on:
-  schedule:
-    # GitHub 最小粒度 5 分钟；10 分钟兼顾时效与对教务系统的压力
-    - cron: "*/10 * * * *"
+  # schedule:
+  #   - cron: "*/10 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
