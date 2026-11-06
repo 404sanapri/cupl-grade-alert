@@ -1,0 +1,62 @@
+name: 教务处公告广播（零凭据）
+
+# 只抓公开公告页，不涉及任何账号密码。
+# 抓取量恒定，与订阅群数量无关，适合大范围分享。
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只抓取不广播"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: announcement-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 拉取仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 抓取并广播
+        env:
+          ANNOUNCE_SUBSCRIBERS: ${{ secrets.ANNOUNCE_SUBSCRIBERS }}
+          ANNOUNCE_KEYWORDS: ${{ secrets.ANNOUNCE_KEYWORDS }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python src/announcement.py --dry-run
+          else
+            python src/announcement.py
+          fi
+
+      - name: 回写公告快照
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        run: |
+          if [ -z "$(git status --porcelain state/)" ]; then
+            echo "快照无变化，跳过提交"
+            exit 0
+          fi
+          git config user.name "grade-alert-bot"
+          git config user.email "grade-alert-bot@users.noreply.github.com"
+          git add state/
+          git commit -m "chore: 更新公告快照 [skip ci]"
+          git push

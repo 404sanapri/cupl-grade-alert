@@ -1,0 +1,13 @@
+[project]
+name = "cupl-grade-alert"
+version = "0.1.0"
+description = "中国政法大学教务成绩更新提醒"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31", "beautifulsoup4>=4.12"]
+
+[tool.pyrefly]
+search-path = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

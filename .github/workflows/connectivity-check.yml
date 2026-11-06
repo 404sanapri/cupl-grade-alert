@@ -1,0 +1,23 @@
+name: 连通性自检
+
+# 用于验证 GitHub Actions 的境外出口能否访问教务系统与统一认证。
+# 不涉及任何账号密码，可在 fork 后手动触发一次。
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: 探测 jwxt 与 tpass
+        run: python scripts/connectivity_check.py
