@@ -182,9 +182,18 @@ def main(argv: list[str] | None = None) -> int:
         if not settings.notify_enabled:
             log.error("未配置通知渠道，无法测试")
             return 2
-        notifier = build_notifier(settings.channel, settings.webhook_url, settings.webhook_secret)
-        notifier.send_alert("这是一条测试消息，收到说明通知渠道配置正确。")
-        log.info("测试消息已发送（若未收到请检查加签/关键词设置）")
+        notifier = build_notifier(
+            settings.channel,
+            settings.webhook_url,
+            settings.webhook_secret,
+            strong=settings.strong_alert,
+        )
+        send_text = getattr(notifier, "send_text", None)
+        if send_text is not None:
+            send_text("这是一条测试消息，收到说明通知渠道配置正确。", "测试通知")
+        else:
+            notifier.send_alert("这是一条测试消息，收到说明通知渠道配置正确。")
+        log.info("测试消息已发送（没看到请检查系统通知设置或加签密钥）")
         return 0
 
     return run(dry_run)
